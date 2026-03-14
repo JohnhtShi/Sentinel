@@ -31,9 +31,9 @@ const decisionLabels: Record<LiveAction, string> = {
   block: "Block",
 };
 
-const MAX_VISIBLE_INCIDENTS = 6;
-const REFRESH_BATCH_SIZE = 1;
+const REFRESH_BATCH_SIZE = 6;
 const REFRESH_INTERVAL_MS = 15000;
+const PAGE_SIZE_OPTIONS = [6, 8, 12, 16];
 
 type FilterValue = "all" | "block" | "hold" | "review";
 type SortValue = "risk" | "newest";
@@ -52,13 +52,15 @@ export function IncidentQueueWorkspace({
   const [pendingQueue, setPendingQueue] = useState<IncidentQueueResponse | null>(null);
   const [pendingThreatCount, setPendingThreatCount] = useState(0);
   const [filter, setFilter] = useState<FilterValue>("all");
-  const [sortBy, setSortBy] = useState<SortValue>("risk");
+  const [sortBy, setSortBy] = useState<SortValue>("newest");
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [queueFilters, setQueueFilters] = useState<QueueFilters>({
     minAmountInput: "",
     maxAmountInput: "",
     minRisk: 0,
   });
+  const [itemsPerPage, setItemsPerPage] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [panel, setPanel] = useState<IncidentPanelResponse | null>(null);
   const [isPanelLoading, setIsPanelLoading] = useState(false);
@@ -210,6 +212,17 @@ export function IncidentQueueWorkspace({
     };
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filter,
+    sortBy,
+    itemsPerPage,
+    queueFilters.minAmountInput,
+    queueFilters.maxAmountInput,
+    queueFilters.minRisk,
+  ]);
+
   const parsedMinAmount = parseAmountInput(queueFilters.minAmountInput);
   const parsedMaxAmount = parseAmountInput(queueFilters.maxAmountInput);
   const amountRangeInvalid =
@@ -245,7 +258,12 @@ export function IncidentQueueWorkspace({
 
       return right.overall_risk - left.overall_risk;
     });
-  const visibleIncidents = incidents.slice(0, MAX_VISIBLE_INCIDENTS);
+  const pageCount = Math.max(1, Math.ceil(incidents.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+  const pageStart = (safeCurrentPage - 1) * itemsPerPage;
+  const visibleIncidents = incidents.slice(pageStart, pageStart + itemsPerPage);
+  const visibleRangeStart = incidents.length ? pageStart + 1 : 0;
+  const visibleRangeEnd = pageStart + visibleIncidents.length;
   const visibleSummary = visibleIncidents.reduce(
     (summary, incident) => {
       if (incident.decision === "block") {
@@ -264,6 +282,13 @@ export function IncidentQueueWorkspace({
 
   const panelOpen = Boolean(selectedIncidentId);
   const panelVisible = panelOpen || isClosingPanel;
+  const paginationPages = buildPaginationPages(safeCurrentPage, pageCount);
+
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
 
   return (
     <div className="relative space-y-4">
@@ -375,8 +400,22 @@ export function IncidentQueueWorkspace({
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-muted">
+                <span>Per page</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(event) => setItemsPerPage(Number(event.target.value))}
+                  className="rounded-full border border-line bg-paper px-3 py-2 text-sm text-ink outline-none transition hover:bg-canvas focus:border-accent"
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <span className="text-sm text-muted">
-                Showing {visibleIncidents.length} of {incidents.length} incidents
+                Showing {visibleRangeStart}-{visibleRangeEnd} of {incidents.length} incidents
               </span>
               <div className="flex flex-wrap gap-2 text-sm">
                 {[
@@ -616,6 +655,37 @@ export function IncidentQueueWorkspace({
                 </div>
               )}
           </div>
+
+          {incidents.length > itemsPerPage ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/45 pt-4">
+              <p className="text-sm text-muted">
+                Page {safeCurrentPage} of {pageCount}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <PaginationButton
+                  disabled={safeCurrentPage === 1}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                >
+                  Newer
+                </PaginationButton>
+                {paginationPages.map((pageNumber) => (
+                  <PaginationButton
+                    key={pageNumber}
+                    active={pageNumber === safeCurrentPage}
+                    onClick={() => setCurrentPage(pageNumber)}
+                  >
+                    {pageNumber}
+                  </PaginationButton>
+                ))}
+                <PaginationButton
+                  disabled={safeCurrentPage === pageCount}
+                  onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+                >
+                  Older
+                </PaginationButton>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <button
@@ -631,7 +701,7 @@ export function IncidentQueueWorkspace({
         <aside
           ref={panelRef}
           aria-hidden={!panelVisible}
-          className={`fixed inset-y-4 right-4 z-40 w-[min(94vw,42rem)] overflow-visible rounded-[34px] border border-line/60 bg-elevated/97 shadow-[0_30px_90px_rgba(14,36,51,0.2)] backdrop-blur-xl transition-all duration-200 ease-out will-change-transform will-change-opacity transform-gpu ${
+          className={`fixed inset-y-4 right-4 z-40 w-[min(94vw,42rem)] overflow-visible rounded-[34px] border border-slate-500/70 bg-elevated/97 shadow-[0_30px_90px_rgba(14,36,51,0.2)] backdrop-blur-xl transition-all duration-200 ease-out will-change-transform will-change-opacity transform-gpu ${
             panelVisible
               ? isClosingPanel
                 ? "pointer-events-none translate-x-4 opacity-0"
@@ -640,7 +710,7 @@ export function IncidentQueueWorkspace({
           }`}
         >
           <div className="flex h-full max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[34px]">
-            <div className="border-b border-line/45 bg-surface/82 px-5 py-5 sm:px-6">
+            <div className="border-b border-slate-400/70 bg-surface/82 px-5 py-5 sm:px-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-muted">
@@ -656,7 +726,7 @@ export function IncidentQueueWorkspace({
                 <button
                   type="button"
                   onClick={closePanel}
-                  className="rounded-full border border-line bg-canvas/85 px-4 py-2 text-sm text-ink transition hover:bg-paper"
+                  className="rounded-full border border-slate-400/80 bg-canvas/85 px-4 py-2 text-sm text-ink transition hover:bg-paper"
                 >
                   Close
                 </button>
@@ -677,13 +747,13 @@ export function IncidentQueueWorkspace({
               ) : (
                 <div className="space-y-4">
                   {pendingQueue ? (
-                    <div className="rounded-[22px] border border-accent/45 bg-accent/10 px-4 py-3 text-sm text-ink">
+                    <div className="rounded-[22px] border border-accent/65 bg-accent/10 px-4 py-3 text-sm text-ink">
                       {pendingThreatCount || "New"} threats are queued in the background. Your
                       current review is pinned until you close this dock or apply the update.
                     </div>
                   ) : null}
 
-                  <div className="rounded-[26px] border border-line/55 bg-canvas/82 p-5">
+                  <div className="rounded-[26px] border border-slate-400/75 bg-canvas/82 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-xl font-semibold leading-tight text-ink">
@@ -725,16 +795,19 @@ export function IncidentQueueWorkspace({
                     <ScoreMetric
                       label="Txn"
                       value={panel.transaction_risk}
+                      tooltipAlign="start"
                       description="Transaction risk measures how unusual the payment itself looks compared with expected payment behavior."
                     />
                     <ScoreMetric
                       label="Behavior"
                       value={panel.behavior_risk}
+                      tooltipAlign="center"
                       description="Behavior risk measures whether the user's session, timing, device, and flow differ from baseline behavior."
                     />
                     <ScoreMetric
                       label="Network"
                       value={panel.network_risk}
+                      tooltipAlign="end"
                       description="Network risk measures whether the recipient or connected accounts are exposed to suspicious paths, rings, or cash-out behavior."
                     />
                   </div>
@@ -744,7 +817,7 @@ export function IncidentQueueWorkspace({
                       {panel.top_reasons.map((reason) => (
                         <span
                           key={reason}
-                          className="rounded-full border border-line/45 bg-surface/88 px-3 py-1.5 text-xs text-muted"
+                            className="rounded-full border border-slate-400/75 bg-surface/88 px-3 py-1.5 text-xs text-muted"
                         >
                           {reason}
                         </span>
@@ -778,7 +851,7 @@ export function IncidentQueueWorkspace({
                     </Link>
                     <Link
                       href={`/incidents/${panel.incident_id}/graph`}
-                      className="rounded-full border border-line bg-canvas/85 px-5 py-3 text-sm text-ink transition hover:bg-paper"
+                      className="rounded-full border border-slate-400/80 bg-canvas/85 px-5 py-3 text-sm text-ink transition hover:bg-paper"
                     >
                       View network exposure
                     </Link>
@@ -817,6 +890,33 @@ function ToggleChip({
   );
 }
 
+function PaginationButton({
+  active = false,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-full border px-4 py-2 text-sm transition ${
+        active
+          ? "border-ink bg-ink text-canvas"
+          : "border-line bg-canvas/85 text-ink hover:bg-paper"
+      } disabled:cursor-not-allowed disabled:opacity-45`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function StatusPill({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full border border-line/40 bg-canvas/78 px-4 py-2 text-sm text-muted">
@@ -843,7 +943,7 @@ function SummaryMetric({
   };
 
   return (
-    <div className="rounded-[22px] border border-slate-300/80 bg-canvas/88 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+    <div className="rounded-[22px] border border-slate-400/80 bg-canvas/88 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
       <div className="flex items-center gap-2">
         <p className="text-[11px] uppercase tracking-[0.18em] text-muted">{label}</p>
         <InfoBadge description={description} />
@@ -859,16 +959,18 @@ function ScoreMetric({
   label,
   value,
   description,
+  tooltipAlign = "end",
 }: {
   label: string;
   value: number;
   description: string;
+  tooltipAlign?: "start" | "center" | "end";
 }) {
   return (
-    <div className="rounded-[22px] border border-slate-300/85 bg-canvas/90 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+    <div className="rounded-[22px] border border-slate-400/80 bg-canvas/90 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
       <div className="flex items-center gap-2">
         <p className="text-[11px] uppercase tracking-[0.16em] text-muted">{label}</p>
-        <InfoBadge description={description} />
+        <InfoBadge description={description} align={tooltipAlign} />
       </div>
       <p className="mt-3 font-serif text-[2rem] leading-none text-ink">
         {Math.round(value * 100)}%
@@ -915,17 +1017,32 @@ function RiskBar({
   );
 }
 
-function InfoBadge({ description }: { description: string }) {
+function InfoBadge({
+  description,
+  align = "end",
+}: {
+  description: string;
+  align?: "start" | "center" | "end";
+}) {
+  const alignmentClassName =
+    align === "start"
+      ? "left-0"
+      : align === "center"
+        ? "left-1/2 -translate-x-1/2"
+        : "right-0";
+
   return (
     <span className="group relative inline-flex">
       <span
-        className="inline-flex h-[19px] w-[19px] cursor-help items-center justify-center rounded-full border border-slate-300 bg-white text-[11px] font-semibold leading-none text-slate-500 shadow-sm"
+        className="inline-flex h-[19px] w-[19px] cursor-help items-center justify-center rounded-full border border-slate-400/80 bg-white text-[11px] font-semibold leading-none text-slate-600 shadow-sm"
         aria-label={description}
         tabIndex={0}
       >
         i
       </span>
-      <span className="pointer-events-none absolute right-0 top-[calc(100%+0.45rem)] z-50 w-56 max-w-[min(18rem,calc(100vw-3rem))] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-[12px] normal-case leading-5 text-slate-50 opacity-0 shadow-2xl transition-opacity duration-75 group-hover:opacity-100 group-focus-within:opacity-100">
+      <span
+        className={`pointer-events-none absolute top-[calc(100%+0.45rem)] z-50 w-56 max-w-[min(18rem,calc(100vw-3rem))] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-[12px] normal-case leading-5 text-slate-50 opacity-0 shadow-2xl transition-opacity duration-75 group-hover:opacity-100 group-focus-within:opacity-100 ${alignmentClassName}`}
+      >
         {description}
       </span>
     </span>
@@ -952,7 +1069,7 @@ function PanelBlock({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-[24px] border border-line/55 bg-canvas/82 p-4">
+    <div className="rounded-[24px] border border-slate-400/80 bg-canvas/82 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
       <p className="text-xs uppercase tracking-[0.18em] text-muted">{title}</p>
       <div className="mt-3">{children}</div>
     </div>
@@ -1034,4 +1151,13 @@ function formatRelativeIncidentTime(timestamp: string) {
   }
 
   return new Date(timestamp).toLocaleDateString();
+}
+
+function buildPaginationPages(currentPage: number, pageCount: number) {
+  if (pageCount <= 5) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const start = Math.max(1, Math.min(currentPage - 2, pageCount - 4));
+  return Array.from({ length: 5 }, (_, index) => start + index);
 }

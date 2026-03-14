@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ExpandablePill } from "@/components/expandable-pill";
 import { IncidentChat } from "@/components/incident-chat";
 import { ScoreBreakdown } from "@/components/score-breakdown";
 import { SectionCard } from "@/components/section-card";
@@ -66,9 +67,10 @@ export default async function IncidentDetailPage({
               <span className="rounded-full bg-paper px-4 py-2 text-muted">
                 {currency.format(detail.amount)}
               </span>
-              <span className="rounded-full bg-paper px-4 py-2 text-muted">
-                {detail.counterpart_label}
-              </span>
+              <ExpandablePill
+                value={detail.counterpart_label}
+                collapsedClassName="max-w-[min(100%,36rem)] truncate"
+              />
             </div>
           </div>
           <div className="rounded-[24px] border border-line/70 bg-paper/80 p-5">

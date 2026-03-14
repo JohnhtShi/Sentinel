@@ -45,16 +45,22 @@ class LiveMonitorService:
         self._latest_snapshot: LiveMonitorSnapshot | None = None
 
     def bootstrap(self) -> LiveMonitorPayload:
-        return self._build_snapshot().payload
+        snapshot = self._build_snapshot()
+        self._latest_snapshot = snapshot
+        return snapshot.payload
 
     def stream(self, batch_size: int = 6) -> LiveMonitorPayload:
         self.engine.next_batch(batch_size)
-        return self._build_snapshot().payload
+        snapshot = self._build_snapshot()
+        self._latest_snapshot = snapshot
+        return snapshot.payload
 
     def trigger_scenario(self, name: str) -> LiveMonitorPayload:
         """Inject a specific scenario and return the updated snapshot."""
         self.engine.inject_scenario(name)
-        return self._build_snapshot().payload
+        snapshot = self._build_snapshot()
+        self._latest_snapshot = snapshot
+        return snapshot.payload
 
     def current_snapshot(self) -> LiveMonitorSnapshot:
         return self._latest_snapshot or self._build_snapshot()

@@ -54,9 +54,10 @@ def incidents_refresh(batch: int = Query(default=4, ge=1, le=12)):
 def incidents_scenario(name: str = Query(...)):
     try:
         live_monitor_service.trigger_scenario(name)
+        # Get the updated queue without adding more transactions
+        return incident_service.get_queue()
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Scenario not found.") from exc
-    return incident_service.get_queue()
 
 
 @app.get("/api/incidents/{incident_id}/panel", response_model=IncidentPanelResponse)

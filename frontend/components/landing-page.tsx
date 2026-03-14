@@ -441,14 +441,14 @@ function InvestigationTrace() {
       <div className="absolute left-8 top-6 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.14),transparent_70%)] blur-3xl dark:opacity-60" />
       <div className="absolute right-0 bottom-8 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.12),transparent_68%)] blur-3xl dark:opacity-60" />
 
-      <div className="relative overflow-hidden rounded-[30px] border border-line/70 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 shadow-frame dark:from-slate-800 dark:via-slate-700 dark:to-slate-800">
+      <div className="relative overflow-hidden rounded-[30px] border border-line/70 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 p-6 shadow-frame dark:from-slate-800 dark:via-slate-700 dark:to-slate-800">
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_40%,transparent_65%,rgba(255,255,255,0.03))] dark:opacity-50" />
 
         <div className="relative">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-slate-300 dark:text-slate-400">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-slate-800 dark:text-slate-400 drop-shadow-sm">
             Investigation trace
           </p>
-          <p className="mt-2 text-sm text-slate-100 dark:text-slate-200">
+          <p className="mt-2 text-sm text-slate-900 dark:text-slate-200 drop-shadow-sm">
             Suspicious money movement across a network
           </p>
         </div>
@@ -562,7 +562,8 @@ function InvestigationTrace() {
             >
               <text
                 fontSize="10"
-                fill="rgba(226,232,240,0.86)"
+                fill="rgba(30,41,59,0.8)"
+                className="dark:fill-slate-300"
                 style={{ letterSpacing: "0.18em" }}
                 textAnchor="middle"
               >

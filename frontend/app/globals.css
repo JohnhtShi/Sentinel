@@ -2,18 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
+@layer base {
+  :root {
+    --color-canvas: #edf2f7;
+    --color-surface: #f8fafc;
+    --color-elevated: #ffffff;
+    --color-paper: #f1f5f9;
+    --color-ink: #0f172a;
+    --color-safe: #0f766e;
+    --color-review: #b7791f;
+    --color-block: #c2410c;
+    --color-panel: #ffffff;
+    --color-muted: #64748b;
+    --color-line: #cbd5e1;
+    --color-accent: #2563eb;
+    
+    --glow-primary: rgba(37, 99, 235, 0.12);
+    --glow-secondary: rgba(15, 118, 110, 0.08);
+    --gradient-start: #edf2f7;
+    --gradient-mid: #f8fafc;
+    --gradient-end: #e2e8f0;
+  }
+
+  .dark {
+    --color-canvas: #0f172a;
+    --color-surface: #1e293b;
+    --color-elevated: #334155;
+    --color-paper: #1e293b;
+    --color-ink: #f8fafc;
+    --color-safe: #14b8a6;
+    --color-review: #f59e0b;
+    --color-block: #ef4444;
+    --color-panel: #1e293b;
+    --color-muted: #94a3b8;
+    --color-line: #334155;
+    --color-accent: #3b82f6;
+    
+    --glow-primary: rgba(59, 130, 246, 0.15);
+    --glow-secondary: rgba(20, 184, 166, 0.1);
+    --gradient-start: #020617;
+    --gradient-mid: #0f172a;
+    --gradient-end: #1e293b;
+  }
 }
 
 body {
   min-height: 100vh;
   background-attachment: fixed;
-  background-color: #edf2f7;
-  background-image: radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 34%),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 30%),
-    linear-gradient(135deg, #edf2f7 0%, #f8fafc 45%, #e2e8f0 100%);
-  color: #0f172a;
+  background-color: var(--color-canvas);
+  background-image: radial-gradient(circle at top left, var(--glow-primary), transparent 34%),
+    radial-gradient(circle at top right, var(--glow-secondary), transparent 30%),
+    linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 45%, var(--gradient-end) 100%);
+  color: var(--color-ink);
   font-family: "Avenir Next", "Segoe UI", sans-serif;
 }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AppShellHeader } from "@/components/app-shell-header";
+import { ThemeProvider } from "@/components/theme-provider";
 
 import "./globals.css";
 
@@ -16,12 +17,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
-        <div className="mx-auto min-h-screen max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
-          <AppShellHeader />
-          {children}
-        </div>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <div className="mx-auto min-h-screen max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
+            <AppShellHeader />
+            {children}
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );

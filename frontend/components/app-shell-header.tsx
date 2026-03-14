@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "./theme-toggle";
 
 export function AppShellHeader() {
   const pathname = usePathname();
@@ -22,16 +23,17 @@ export function AppShellHeader() {
           Unified analyst workspace
         </span>
       </div>
-      {isQueue ? null : (
-        <nav className="flex flex-wrap items-center gap-3 text-sm">
+      <nav className="flex flex-wrap items-center gap-3 text-sm">
+        {!isQueue && (
           <Link
             href="/dashboard"
             className="rounded-full border border-line bg-canvas/70 px-4 py-2 text-ink transition hover:bg-paper"
           >
             Dashboard
           </Link>
-        </nav>
-      )}
+        )}
+        <ThemeToggle />
+      </nav>
     </header>
   );
 }

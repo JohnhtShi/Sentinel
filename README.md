@@ -63,6 +63,45 @@ Main app pages:
 - Example case: `http://127.0.0.1:3000/cases/tx_blocked_001`
 - Example graph: `http://127.0.0.1:3000/cases/tx_blocked_001/graph`
 
+## Deploy
+
+Recommended setup:
+
+- Frontend on Vercel from the `frontend/` directory
+- Backend on Render from the `backend/` directory
+
+### Render Backend
+
+This repo includes [render.yaml](/Users/johndev/Downloads/GenAI/GenAI-Genesis/render.yaml) for the API service.
+
+Set these environment variables in Render:
+
+- `FRONTEND_ORIGINS=https://your-vercel-app.vercel.app`
+- `GEMINI_API_KEY=...` (optional)
+- `GEMINI_MODEL=gemini-2.0-flash` (optional)
+- `GEMINI_TIMEOUT_SECONDS=8` (optional)
+
+Start command:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+### Vercel Frontend
+
+Deploy the `frontend/` folder as a Next.js project.
+
+Set this environment variable in Vercel:
+
+- `NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com`
+
+### Post-Deploy Wiring
+
+1. Deploy the Render backend and copy its public URL.
+2. Set `NEXT_PUBLIC_API_BASE_URL` in Vercel to that Render URL.
+3. Set `FRONTEND_ORIGINS` in Render to your Vercel frontend URL.
+4. Redeploy both if needed so the env vars are picked up.
+
 ## Gemini
 
 Gemini is optional for local development. If `GEMINI_API_KEY` is not set, Sentinel falls back to deterministic explanations.

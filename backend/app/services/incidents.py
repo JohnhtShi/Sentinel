@@ -21,24 +21,37 @@ from .live_monitor import live_monitor_service
 class IncidentService:
     def __init__(self) -> None:
         self.explanations = ExplanationService()
+        self._feed_incident_ids: list[str] = []
+        self._alert_cache: dict[str, Any] = {}
+        self._transaction_cache: dict[str, dict[str, Any]] = {}
+        self._incident_timestamps: dict[str, str] = {}
+        self._max_feed_size = 24
+        self._max_transaction_cache = 360
 
     def get_queue(self) -> IncidentQueueResponse:
         snapshot = live_monitor_service.current_snapshot()
-        incidents = sorted(
-            [self._queue_item_from_alert(alert) for alert in snapshot.payload.alerts],
-            key=lambda item: (item.overall_risk, item.generated_at),
-            reverse=True,
+        self._sync_from_snapshot(snapshot)
+        incidents = [
+            self._queue_item_from_alert(self._alert_cache[incident_id])
+            for incident_id in self._feed_incident_ids
+            if incident_id in self._alert_cache
+        ]
+        blocked_count = sum(1 for item in incidents if item.decision == "block")
+        hold_count = sum(1 for item in incidents if item.decision == "hold")
+        review_count = sum(1 for item in incidents if item.decision == "review")
+        suspicious_volume = sum(
+            item.amount for item in incidents if item.decision in {"hold", "block"}
         )
         stats = snapshot.payload.stats
         return IncidentQueueResponse(
             generated_at=snapshot.payload.generated_at,
             stats=IncidentQueueStats(
                 total_incidents=len(incidents),
-                blocked_count=stats.blocked_count,
-                review_count=stats.review_count,
-                hold_count=stats.held_count,
+                blocked_count=blocked_count,
+                review_count=review_count,
+                hold_count=hold_count,
                 monitored_transactions=stats.transactions_monitored,
-                suspicious_volume=stats.suspicious_volume,
+                suspicious_volume=round(suspicious_volume, 2),
                 average_latency_ms=stats.total_latency_ms,
             ),
             incidents=incidents,
@@ -242,19 +255,55 @@ class IncidentService:
 
     def _find_alert(self, incident_id: str):
         snapshot = live_monitor_service.current_snapshot()
-        for alert in snapshot.payload.alerts:
-            if self._incident_id(alert) == incident_id:
-                return alert
+        self._sync_from_snapshot(snapshot)
+        if incident_id in self._alert_cache:
+            return self._alert_cache[incident_id]
         raise KeyError(incident_id)
 
     def _find_transaction(self, alert) -> dict[str, Any] | None:
         if not alert.transaction_id:
             return None
+        cached = self._transaction_cache.get(alert.transaction_id)
+        if cached:
+            return cached
         snapshot = live_monitor_service.current_snapshot()
+        self._sync_from_snapshot(snapshot)
+        cached = self._transaction_cache.get(alert.transaction_id)
+        if cached:
+            return cached
         for tx in snapshot.enriched:
             if tx["transaction_id"] == alert.transaction_id:
                 return tx
         return None
+
+    def _sync_from_snapshot(self, snapshot) -> None:
+        for tx in snapshot.enriched[-120:]:
+            transaction_id = tx["transaction_id"]
+            self._transaction_cache[transaction_id] = tx
+
+        while len(self._transaction_cache) > self._max_transaction_cache:
+            oldest_transaction_id = next(iter(self._transaction_cache))
+            self._transaction_cache.pop(oldest_transaction_id, None)
+
+        alerts_by_time = sorted(
+            snapshot.payload.alerts,
+            key=lambda alert: (
+                self._timestamp_for_alert(alert, snapshot),
+                f"{alert.final_risk:.4f}",
+            ),
+            reverse=True,
+        )
+
+        for alert in alerts_by_time:
+            incident_id = self._incident_id(alert)
+            self._alert_cache[incident_id] = alert
+            self._incident_timestamps[incident_id] = self._timestamp_for_alert(alert, snapshot)
+            if incident_id in self._feed_incident_ids:
+                self._feed_incident_ids.remove(incident_id)
+            self._feed_incident_ids.insert(0, incident_id)
+
+        if len(self._feed_incident_ids) > self._max_feed_size:
+            self._feed_incident_ids = self._feed_incident_ids[: self._max_feed_size]
 
     def _generate_explanation(self, alert):
         transaction_anomalies = self._transaction_anomalies(alert)
@@ -355,8 +404,26 @@ class IncidentService:
         return f"{alert_type} · {self._generated_at(alert)}"
 
     def _generated_at(self, alert) -> str:
-        tx = self._find_transaction(alert)
-        return tx["timestamp"] if tx else live_monitor_service.current_snapshot().payload.generated_at or ""
+        incident_id = self._incident_id(alert)
+        if incident_id in self._incident_timestamps:
+            return self._incident_timestamps[incident_id]
+        return self._timestamp_for_alert(alert)
+
+    def _timestamp_for_alert(self, alert, snapshot=None) -> str:
+        if alert.transaction_id:
+            cached = self._transaction_cache.get(alert.transaction_id)
+            if cached:
+                return cached["timestamp"]
+
+        if snapshot is None:
+            snapshot = live_monitor_service.current_snapshot()
+
+        if alert.transaction_id:
+            for tx in snapshot.enriched:
+                if tx["transaction_id"] == alert.transaction_id:
+                    return tx["timestamp"]
+
+        return snapshot.payload.generated_at or ""
 
     def _action_copy(self, action: str) -> str:
         mapping = {

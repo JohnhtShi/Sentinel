@@ -235,6 +235,13 @@ class IncidentService:
             "recommended_action": detail.recommended_action,
         }
 
+        # Latch routing is temporarily disabled so we can evaluate the higher
+        # token budget on the raw model path by itself.
+        #
+        # direct_response = self._direct_incident_chat_response(detail, message, history)
+        # if direct_response is not None:
+        #     return direct_response
+
         fallback_answer = (
             f"{detail.title} is marked {detail.decision} at {round(detail.overall_risk * 100)}% risk. "
             f"The strongest contributors are {', '.join(detail.reasons[:2])}."
@@ -250,6 +257,245 @@ class IncidentService:
             ],
         )
         return IncidentChatResponse(**response.model_dump())
+
+    @staticmethod
+    def _normalize_chat_message(message: str) -> str:
+        return " ".join(message.lower().strip().split())
+
+    def _chat_intent(self, normalized: str) -> str:
+        if not normalized:
+            return "incomplete"
+
+        if normalized in {
+            "can you",
+            "could you",
+            "would you",
+            "please",
+            "tell me",
+            "show me",
+            "can you explain",
+            "explain what",
+        }:
+            return "incomplete"
+
+        if normalized in {"why", "why?"} or normalized.startswith("why "):
+            return "why"
+
+        if normalized in {"what happened", "what happened?"}:
+            return "what_happened"
+
+        if (
+            "what's going on" in normalized
+            or "what is going on" in normalized
+            or "what is wrong" in normalized
+            or "what's wrong" in normalized
+            or "can you explain" in normalized
+            or "help me understand" in normalized
+        ):
+            return "explain_case"
+
+        if "which score" in normalized or "contributed the most" in normalized:
+            return "top_score"
+
+        if "verify next" in normalized or (
+            "what should" in normalized and "verify" in normalized
+        ):
+            return "verify_next"
+
+        if (
+            "behavior" in normalized
+            or "typical customer behavior" in normalized
+            or "baseline" in normalized
+            or "unusual compared to history" in normalized
+        ):
+            return "behavior"
+
+        if (
+            "network" in normalized
+            or "ring" in normalized
+            or "loop" in normalized
+            or "circular" in normalized
+            or "money flow" in normalized
+            or "counterparties" in normalized
+        ):
+            return "network"
+
+        if (
+            "prior aml" in normalized
+            or "aml history" in normalized
+            or "sanctions" in normalized
+            or "kyc" in normalized
+            or "watchlist" in normalized
+        ):
+            return "unsupported_data"
+
+        if normalized in {"follow up", "follow-up", "can you follow up", "can you follow up?"}:
+            return "follow_up"
+
+        return "none"
+
+    def _direct_incident_chat_response(
+        self,
+        detail: IncidentDetailResponse,
+        message: str,
+        history: list[dict[str, str]],
+    ) -> IncidentChatResponse | None:
+        normalized = self._normalize_chat_message(message)
+        intent = self._chat_intent(normalized)
+        if intent == "none":
+            return None
+
+        if intent == "incomplete":
+            return IncidentChatResponse(
+                answer=(
+                    "Yes. What would you like me to explain about this case: why it was flagged, "
+                    "which signal mattered most, or what the analyst should verify next?"
+                ),
+                follow_ups=[
+                    "Why was this incident flagged?",
+                    "What should the analyst verify next?",
+                ],
+                mode="fallback",
+            )
+
+        top_reasons = detail.reasons[:2]
+        top_reason_text = ", then ".join(top_reasons) if len(top_reasons) > 1 else (
+            top_reasons[0] if top_reasons else "the strongest available risk signals"
+        )
+        follow_ups = [
+            "Which score contributed the most?",
+            "What should the analyst verify next?",
+        ]
+        if intent in {"what_happened", "explain_case"}:
+            return IncidentChatResponse(
+                answer=(
+                    f"{detail.title} reached {round(detail.overall_risk * 100)}% risk and is currently marked "
+                    f"{detail.decision}. The case stands out because {top_reason_text}. "
+                    f"Together, those signals suggest suspicious money movement that needs analyst review."
+                ),
+                follow_ups=follow_ups,
+                mode="fallback",
+            )
+
+        if intent == "why":
+            return IncidentChatResponse(
+                answer=(
+                    f"Sentinel escalated this case because {top_reason_text}. "
+                    f"Those signals pushed the incident to {round(detail.overall_risk * 100)}% risk, "
+                    f"which is enough to support a {detail.decision} decision."
+                ),
+                follow_ups=follow_ups,
+                mode="fallback",
+            )
+
+        if intent == "top_score":
+            score_pairs = [
+                ("transaction", detail.transaction_risk),
+                ("behavior", detail.behavior_risk),
+                ("network", detail.network_risk),
+            ]
+            driver, driver_value = max(score_pairs, key=lambda item: item[1])
+            return IncidentChatResponse(
+                answer=(
+                    f"The {driver} score contributed the most at {round(driver_value * 100)}%. "
+                    f"That aligns with the case evidence showing {top_reason_text}."
+                ),
+                follow_ups=[
+                    "Why did that signal matter most?",
+                    "What should the analyst verify next?",
+                ],
+                mode="fallback",
+            )
+
+        if intent == "verify_next":
+            return IncidentChatResponse(
+                answer=(
+                    f"The analyst should verify the evidence behind {top_reason_text}. "
+                    f"That means checking the transfer path, counterparties, timing, and whether "
+                    f"those facts support the recommended action to {detail.recommended_action.lower()}."
+                ),
+                follow_ups=[
+                    "Which score contributed the most?",
+                    "What behavior signals stand out?",
+                ],
+                mode="fallback",
+            )
+
+        if intent == "behavior":
+            behavior_text = ", then ".join(detail.behavior_anomalies[:2]) if detail.behavior_anomalies else (
+                "the transfer context deviates from the customer's baseline behavior"
+            )
+            return IncidentChatResponse(
+                answer=(
+                    f"The behavior signals stand out because {behavior_text}. "
+                    f"That raises concern that this transfer does not match the customer's normal pattern."
+                ),
+                follow_ups=[
+                    "Do the transfer amounts deviate from typical customer behavior?",
+                    "What should the analyst verify next?",
+                ],
+                mode="fallback",
+            )
+
+        if intent == "network":
+            network_text = ", then ".join(detail.network_anomalies[:2]) if detail.network_anomalies else (
+                "the connected accounts form a suspicious movement pattern"
+            )
+            return IncidentChatResponse(
+                answer=(
+                    f"The network evidence matters because {network_text}. "
+                    f"That pattern suggests funds may be moving through linked accounts in a way that deserves manual review."
+                ),
+                follow_ups=[
+                    "Which accounts should the analyst inspect first?",
+                    "Which score contributed the most?",
+                ],
+                mode="fallback",
+            )
+
+        if intent == "unsupported_data":
+            return IncidentChatResponse(
+                answer=(
+                    "This incident view does not include prior AML history, KYC records, sanctions results, "
+                    "or watchlist data. I can only answer from the transaction, behavior, and network evidence shown here."
+                ),
+                follow_ups=[
+                    "What behavior signals stand out?",
+                    "What should the analyst verify next?",
+                ],
+                mode="fallback",
+            )
+
+        if intent == "follow_up":
+            prior_assistant = next(
+                (
+                    item.get("content", "").strip()
+                    for item in reversed(history)
+                    if item.get("role") == "assistant" and item.get("content", "").strip()
+                ),
+                "",
+            )
+            if "verify next" in prior_assistant.lower():
+                return IncidentChatResponse(
+                    answer=(
+                        f"After checking the strongest signals, the analyst should confirm the transfer path, "
+                        f"counterparties, and timing behind {top_reason_text}. They should also validate whether "
+                        f"the recommended action of {detail.recommended_action.lower()} is still appropriate."
+                    ),
+                    follow_ups=follow_ups,
+                    mode="fallback",
+                )
+            return IncidentChatResponse(
+                answer=(
+                    f"The next useful step is to break the case into evidence buckets: transaction behavior, "
+                    f"customer behavior, and network pattern. For this incident, start with {top_reason_text}, "
+                    f"then confirm whether the counterparties and transfer sequence support the {detail.decision} decision."
+                ),
+                follow_ups=follow_ups,
+                mode="fallback",
+            )
+
+        return None
 
     def _queue_item_from_alert(self, alert) -> IncidentQueueItem:
         return IncidentQueueItem(

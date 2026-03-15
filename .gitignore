@@ -17,10 +17,12 @@ __pycache__/
 
 # Environment variables
 .env
+.env.*
 .env.local
 /frontend/.env.example
 /frontend/.env.production
-
+backend/.env
+backend/.env.*
 
 # Data files
 *.parquet

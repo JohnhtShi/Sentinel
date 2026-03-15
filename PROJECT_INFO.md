@@ -17,10 +17,6 @@ Frameworks and Libraries:
 - scikit-learn
 - networkx
 
-Platforms:
-- Vercel (frontend deployment)
-- Render (backend deployment)
-
 Tools:
 - OpenAI API
 - uvicorn

@@ -52,7 +52,6 @@ GenAI-Genesis/
 ├── backend/
 ├── frontend/
 ├── data/
-├── render.yaml
 ├── PROJECT_INFO.md
 └── README.md
 ```
@@ -145,38 +144,6 @@ If `NEXT_PUBLIC_API_BASE_URL` is unset, the frontend falls back to `http://127.0
 - `GET /api/live/bootstrap`
 - `GET /api/live/stream`
 - `POST /api/uploads/transactions/live`
-
-## Deployment
-
-### Backend on Render
-
-This repository includes [render.yaml](/Users/johndev/Downloads/GenAI/GenAI-Genesis/render.yaml) for the API service.
-
-- root directory: `backend/`
-- build command: `pip install -r requirements.txt`
-- start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- health check: `/api/health`
-
-Recommended environment variables:
-
-- `FRONTEND_ORIGINS=https://your-frontend-domain`
-- `OPENAI_API_KEY=...`
-- `OPENAI_MODEL=gpt-4o-mini`
-- `OPENAI_BASE_URL=https://vjioo4r1vyvcozuj.us-east-2.aws.endpoints.huggingface.cloud/v1`
-- `OPENAI_TIMEOUT_SECONDS=8`
-
-### Frontend on Vercel
-
-Deploy `frontend/` as a Next.js app and set:
-
-- `NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com`
-
-### Post-deploy wiring
-
-1. Deploy the backend and copy its public URL.
-2. Set `NEXT_PUBLIC_API_BASE_URL` in the frontend deployment to that backend URL.
-3. Set `FRONTEND_ORIGINS` in the backend deployment to the frontend URL.
-4. Redeploy if needed so the environment changes are picked up.
 
 ## Notes
 

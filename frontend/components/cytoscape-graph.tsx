@@ -37,6 +37,7 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
   const containerRef = useRef<HTMLDivElement | null>(null);
   const replayPanelRef = useRef<HTMLDivElement | null>(null);
   const cytoscapeRef = useRef<any>(null);
+  const layoutRef = useRef<any>(null);
   const clampViewportRef = useRef<(() => void) | null>(null);
   const hoveredEdgeIdRef = useRef<string | null>(null);
   const replayTimerRef = useRef<number | null>(null);
@@ -45,6 +46,7 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
   const isClampingRef = useRef(false);
   const isFullscreenRef = useRef(false);
   const { resolvedTheme } = useTheme();
+  const [isMounted, setIsMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState<CSSProperties | null>(null);
@@ -66,12 +68,16 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
   const replayStatusLabel = replayEnabled
     ? `${Math.max(activeStepIndex + 1, 0)} of ${replaySteps.length} transfers`
     : null;
+  const graphBackgroundClass =
+    isMounted && resolvedTheme === "dark"
+      ? "bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.2),_rgba(2,6,23,0.75))]"
+      : "bg-[radial-gradient(circle_at_top,_#f8fbff,_#e6edf6_62%,_#dce6f1)]";
   const layoutOptions = useMemo(
     () => ({
       name: "cose",
       padding: 50,
-      animate: true,
-      animationDuration: 1000,
+      animate: false,
+      animationDuration: 0,
       fit: true,
       nodeRepulsion: 200000,
       idealEdgeLength: 160,
@@ -82,6 +88,10 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
     }),
     [],
   );
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!enableReplay) {
@@ -713,48 +723,53 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
       elements: [...graph.nodes, ...graph.edges],
       minZoom: 0.45,
       maxZoom: 2.2,
-      layout: layoutOptions,
       style: styles as any,
     });
 
     cytoscapeRef.current = instance;
+    layoutRef.current = instance.layout(layoutOptions);
+    layoutRef.current.run();
     const buildEdgeHoverState = (edge: any): EdgeHoverState | null => {
-      const container = containerRef.current;
-      const cy = typeof edge?.cy === "function" ? edge.cy() : null;
-      if (!container || !cy || cy.destroyed() || !cy.renderer() || edge.removed?.()) {
+      try {
+        const container = containerRef.current;
+        const cy = typeof edge?.cy === "function" ? edge.cy() : null;
+        if (!container || !cy || cy.destroyed() || !cy.renderer() || edge.removed?.()) {
+          return null;
+        }
+
+        const midpoint = edge.renderedMidpoint();
+        const tooltipWidth = isFullscreenRef.current ? 288 : 260;
+        const tooltipHeight = 86;
+        const gap = 12;
+        const inset = 12;
+
+        const left = clampNumber(
+          midpoint.x - tooltipWidth / 2,
+          inset,
+          Math.max(inset, container.clientWidth - tooltipWidth - inset),
+        );
+
+        const preferredTop = midpoint.y - tooltipHeight - gap;
+        const fallbackTop = midpoint.y + gap;
+        const top =
+          preferredTop >= inset
+            ? preferredTop
+            : clampNumber(
+                fallbackTop,
+                inset,
+                Math.max(inset, container.clientHeight - tooltipHeight - inset),
+              );
+
+        return {
+          id: String(edge.id()),
+          amount: formatEdgeAmount(edge.data("amount"), edge.data("label")),
+          timestamp: String(edge.data("timestamp") ?? "Time unavailable"),
+          left,
+          top,
+        };
+      } catch {
         return null;
       }
-
-      const midpoint = edge.renderedMidpoint();
-      const tooltipWidth = isFullscreenRef.current ? 288 : 260;
-      const tooltipHeight = 86;
-      const gap = 12;
-      const inset = 12;
-
-      const left = clampNumber(
-        midpoint.x - tooltipWidth / 2,
-        inset,
-        Math.max(inset, container.clientWidth - tooltipWidth - inset),
-      );
-
-      const preferredTop = midpoint.y - tooltipHeight - gap;
-      const fallbackTop = midpoint.y + gap;
-      const top =
-        preferredTop >= inset
-          ? preferredTop
-          : clampNumber(
-              fallbackTop,
-              inset,
-              Math.max(inset, container.clientHeight - tooltipHeight - inset),
-            );
-
-      return {
-        id: String(edge.id()),
-        amount: formatEdgeAmount(edge.data("amount"), edge.data("label")),
-        timestamp: String(edge.data("timestamp") ?? "Time unavailable"),
-        left,
-        top,
-      };
     };
 
     const syncHoveredEdge = () => {
@@ -811,6 +826,13 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
       const target = event.target;
 
       if (target === instance) {
+        hoveredEdgeIdRef.current = null;
+        setHoveredEdge(null);
+        return;
+      }
+
+      const targetCy = typeof target?.cy === "function" ? target.cy() : null;
+      if (targetCy && targetCy.destroyed()) {
         hoveredEdgeIdRef.current = null;
         setHoveredEdge(null);
         return;
@@ -906,6 +928,10 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
     });
 
     return () => {
+      if (layoutRef.current && typeof layoutRef.current.stop === "function") {
+        layoutRef.current.stop();
+        layoutRef.current = null;
+      }
       clampViewportRef.current = null;
       hoveredEdgeIdRef.current = null;
       isClampingRef.current = false;
@@ -913,10 +939,11 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
       setHoveredEdge(null);
       cytoscapeRef.current = null;
       if (!instance.destroyed()) {
+        instance.removeAllListeners();
         instance.destroy();
       }
     };
-  }, [layoutOptions, resolvedTheme]);
+  }, [layoutOptions]);
 
   useEffect(() => {
     const instance = cytoscapeRef.current;
@@ -924,12 +951,17 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
       return;
     }
 
+    if (layoutRef.current && typeof layoutRef.current.stop === "function") {
+      layoutRef.current.stop();
+    }
+
     instance.batch(() => {
       instance.elements().remove();
       instance.add([...graph.nodes, ...graph.edges]);
     });
 
-    instance.layout(layoutOptions).run();
+    layoutRef.current = instance.layout(layoutOptions);
+    layoutRef.current.run();
     instance.resize();
     instance.fit(undefined, isFullscreenRef.current ? 90 : 50);
     clampViewportRef.current?.();
@@ -1057,11 +1089,9 @@ export function CytoscapeGraph({ graph, enableReplay = false }: CytoscapeGraphPr
       >
         <div
           ref={containerRef}
-          className={`w-full ${
-            resolvedTheme === "dark"
-              ? "bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.2),_rgba(2,6,23,0.75))]"
-              : "bg-[radial-gradient(circle_at_top,_#f8fbff,_#e6edf6_62%,_#dce6f1)]"
-          } ${isFullscreen ? "h-full min-h-[calc(100vh-2rem)]" : "h-[520px]"}`}
+          className={`w-full rounded-[24px] ${graphBackgroundClass} ${
+            isFullscreen ? "h-full min-h-[calc(100vh-2rem)]" : "h-[520px]"
+          }`}
         />
         {enableReplay ? (
           <div className="absolute top-4 left-4 z-20 max-w-[min(calc(100%-6rem),42rem)]">

@@ -135,6 +135,10 @@ class LiveMonitorStats(BaseModel):
     transactions_monitored: int
     flagged_alerts: int
     suspicious_volume: float
+    suspicious_dollars_prevented: float
+    high_risk_accounts_isolated: int
+    analyst_hours_saved: float
+    false_positive_reduction_estimate: float
     ring_clusters: int
     rules_triggered: int
     hot_country: str

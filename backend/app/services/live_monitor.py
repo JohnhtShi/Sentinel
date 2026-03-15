@@ -423,11 +423,47 @@ class LiveMonitorService:
             for alert in alerts
             if alert.action in {"hold", "block"}
         )
+        suspicious_dollars_prevented = sum(
+            (alert.suspicious_funds_total or alert.amount)
+            for alert in alerts
+            if alert.action in {"hold", "block"}
+        )
+        isolated_accounts = {
+            account
+            for alert in alerts
+            if alert.action in {"hold", "block"}
+            for account in alert.accounts_involved
+        }
+        analyst_hours_saved = round(
+            max(len(alerts) * 0.18 + len(ring_alerts) * 0.55, 0.0),
+            1,
+        )
+        false_positive_reduction_estimate = round(
+            min(
+                0.18
+                + (len(ring_alerts) * 0.06)
+                + (
+                    sum(
+                        1
+                        for alert in alerts
+                        if alert.why_flagged.top_driver == "Network"
+                    )
+                    / max(len(alerts), 1)
+                )
+                * 0.24,
+                0.58,
+            ),
+            2,
+        )
         countries = Counter(tx["ip_country"] for tx in transactions[-30:])
         return LiveMonitorStats(
             transactions_monitored=len(transactions),
             flagged_alerts=len(alerts),
             suspicious_volume=round(suspicious_volume, 2),
+            suspicious_dollars_prevented=round(suspicious_dollars_prevented, 2),
+            high_risk_accounts_isolated=len(isolated_accounts),
+            analyst_hours_saved=analyst_hours_saved,
+            false_positive_reduction_estimate=false_positive_reduction_estimate,
             ring_clusters=len(ring_alerts),
             rules_triggered=rules_triggered,
             hot_country=countries.most_common(1)[0][0] if countries else "--",

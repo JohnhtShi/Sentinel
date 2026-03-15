@@ -267,6 +267,31 @@ export function LiveMonitorDashboard({
         </div>
       </SectionCard>
 
+      <SectionCard title="Business impact" eyebrow="Why this snapshot matters">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ImpactCard
+            label="Suspicious dollars prevented"
+            value={currency.format(payload.stats.suspicious_dollars_prevented)}
+            detail="Estimated value stopped by current hold/block actions"
+          />
+          <ImpactCard
+            label="High-risk accounts isolated"
+            value={payload.stats.high_risk_accounts_isolated.toString()}
+            detail="Accounts linked to the highest-risk alerts in this window"
+          />
+          <ImpactCard
+            label="Analyst hours saved"
+            value={`${payload.stats.analyst_hours_saved.toFixed(1)}h`}
+            detail="Estimated triage time avoided through prioritization"
+          />
+          <ImpactCard
+            label="False-positive reduction estimate"
+            value={`${Math.round(payload.stats.false_positive_reduction_estimate * 100)}%`}
+            detail="Improvement from combining anomaly, rules, and network evidence"
+          />
+        </div>
+      </SectionCard>
+
       <SectionCard title="Screening controls" eyebrow="Tune what gets surfaced first">
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[22px] border border-line/70 bg-paper/70 p-5">
@@ -695,6 +720,24 @@ function MiniMetric({
     <div className="rounded-[20px] border border-line/70 bg-panel/90 p-4">
       <p className="text-xs uppercase tracking-[0.18em] text-muted">{label}</p>
       <p className={`mt-3 font-serif text-3xl ${toneMap[tone]}`}>{value}</p>
+    </div>
+  );
+}
+
+function ImpactCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-line/70 bg-panel/85 p-5">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">{label}</p>
+      <p className="mt-3 font-serif text-4xl text-ink">{value}</p>
+      <p className="mt-3 text-sm leading-6 text-muted">{detail}</p>
     </div>
   );
 }

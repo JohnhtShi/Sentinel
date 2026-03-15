@@ -50,6 +50,8 @@ const SCENARIOS = [
   { key: "cross_border_travel", label: "Cross-border travel" },
 ] as const;
 
+const UPPERCASE_TAG_WORDS = new Set(["ip", "vpn", "ai", "api"]);
+
 type FilterValue = "all" | "block" | "hold" | "review";
 type SortValue = "risk" | "newest";
 type QueueFilters = {
@@ -794,7 +796,7 @@ export function IncidentQueueWorkspace({
                             key={reason}
                             className="rounded-full border border-line/35 px-3 py-1 text-xs text-muted"
                           >
-                            {reason}
+                            {formatTagLabel(reason)}
                           </span>
                         ))}
                       </div>
@@ -988,9 +990,9 @@ export function IncidentQueueWorkspace({
                       {panel.top_reasons.map((reason) => (
                         <span
                           key={reason}
-                            className="rounded-full border border-slate-400/75 bg-surface/88 px-3 py-1.5 text-xs text-muted"
+                          className="rounded-full border border-slate-400/75 bg-surface/88 px-3 py-1.5 text-xs text-muted"
                         >
-                          {reason}
+                          {formatTagLabel(reason)}
                         </span>
                       ))}
                     </div>
@@ -1094,6 +1096,29 @@ function StatusPill({ children }: { children: ReactNode }) {
       {children}
     </span>
   );
+}
+
+function formatTagLabel(value: string) {
+  return value
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split("-")
+        .map((segment) => {
+          if (!segment) {
+            return segment;
+          }
+
+          const normalized = segment.toLowerCase();
+          if (UPPERCASE_TAG_WORDS.has(normalized)) {
+            return normalized.toUpperCase();
+          }
+
+          return normalized[0].toUpperCase() + normalized.slice(1);
+        })
+        .join("-"),
+    )
+    .join(" ");
 }
 
 function InlineStat({

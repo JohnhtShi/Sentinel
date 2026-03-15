@@ -166,17 +166,6 @@ export function LiveMonitorDashboard({
                   </div>
                 </label>
               </div>
-              <button
-                type="button"
-                onClick={() => setPolling((current) => !current)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
-                  polling
-                    ? "border-white/80 bg-white text-slate-950 hover:bg-white"
-                    : "border-line bg-paper text-ink hover:bg-paper"
-                }`}
-              >
-                {polling ? "Pause live stream" : "Resume live stream"}
-              </button>
               {(isInjectingScenario || lastScenario) && (
                 <span className="rounded-full border border-line bg-paper px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted">
                   {isInjectingScenario
